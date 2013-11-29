@@ -74,7 +74,7 @@ Now, on your keyboard, tap on the <code>i</code> key; use the arrow keys to navi
 
 Now we add the LDIF and provision the server by executing the following command:
 
-	sudo ldapadd -x -D cn=admin,dc=yourdomain,dc=tld -W -f frontend.yourdomain.tld.ldif
+	ldapadd  -x -D "cn=admin,dc=vandekemp,dc=com" -f frontend.yourdomain.tld.ldif  -W
 
 The system will respond with `Enter LDAP Password:`. Enter your root LDAP password (the one you set during `slapd` installation).
 
@@ -101,13 +101,84 @@ First, create the SOGo administrative account in your LDAP server. The following
 
 Load the LDIF file inside your LDAP server using the following command:
 
-	sudo ldapadd -f sogo.ldif -x -w qwerty -D cn=admin,dc=yourdomain,dc=tld
+	ldapadd  -x -D "cn=admin,dc=vandekemp,dc=com" -f sogo.ldif  -W
 
 If successful, the system will respond with `adding new entry "uid=sogo,ou=Users,dc=yourdomain,dc=tld"`.
 
-Next, execute (replacing `LDAPpassword`):
+Next, execute (replacing `LDAPpassword` and `yourdomain, tld`):
 
 	sudo ldappasswd -h localhost -x -w LDAPpassword -D cn=admin,dc=yourdomain,dc=tld uid=sogo,ou=Users,dc=yourdomain,dc=tld -s LDAPpassword 
+
+### Add Samba 4 
+	Configure the Network to use a static address. Edit  nano /etc/network/interfaces  : to fit with your ip address
+
+	
+			auto lo eth0
+			iface lo inet loopback
+ 
+			iface eth0 inet static
+			address 192.168.99.200
+			netmask 255.255.255.0
+			gateway 192.168.99.254
+			dns-nameservers 192.168.99.200 8.8.8.8
+			dns-search yourdomain.tld
+			
+	Install the Samba 4 Packages
+
+	
+			apt-get install samba4
+
+The installation will throw out an error and apt will set the package to half installed. As the error isn’t relevant to us, we have to fix the package by manually setting the package to installed.
+
+    Edit: nano /var/lib/dpkg/status and search for “Package: samba4″ #search shortcut key control+w
+    Replace “half-configured” with “installed”
+
+Now we are going to build the Active Directory Domain:
+
+	
+			rm /etc/samba/smb.conf
+
+	
+			/usr/share/samba/setup/provision --realm=demo.local --domain=DEMO --adminpass='Test123' --server-role=dc --dns-backend=SAMBA_INTERNAL
+			
+Next step is to start Samba:
+
+			initctl start samba4
+
+
+
+Testing out our installation
+
+			apt-get install samba4-clients
+			smbclient -L localhost -U%
+
+The last command should display the currently defined and served shares on the server. Should look something like:
+
+Sharename       Type       Comment
+---------       ----       -------
+netlogon        Disk
+sysvol          Disk
+IPC$            IPC        IPC Service
+
+The BIND package was automatically installed when we installed Samba4. However, it can be uninstalled because Samba's internal DNS server will be used, instead:
+
+			apt-get -y remove --purge bind9
+
+Kerberos
+
+Step 1: Install the Kerberos Utilities
+
+			apt-get install krb5-user
+
+When asked for the default realm, enter yourdomain.tlg and ‘hostname′ as the host. Test out if Kerberos works by executing:
+	
+			kinit administrator@DEMO.LOCAL
+
+The Domain Name needs to be written in UPPERCASE letters. If the command succeeds, run the following command to check if we have gotten a kerberos ticket:
+
+			klist -e
+
+			
 
 ### Add SOGo Repository & GPG Public Key
 
